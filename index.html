@@ -42,6 +42,13 @@
         .shelf-header { display: grid; grid-template-columns: 1fr 1.5fr 1fr 2fr auto; gap: 15px; padding: 15px; align-items: center; cursor: pointer; }
         .shelf-details { display: none; padding: 15px; background: var(--gray-50); border-top: 1px solid var(--gray-200); }
         .shelf-input { padding: 6px; border: 1px solid var(--gray-200); border-radius: 5px; width: 100%; }
+        .cfg-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--gray-200); margin-bottom: 18px; }
+        .cfg-tab { padding: 9px 14px; border: none; background: none; cursor: pointer; font: inherit; font-weight: 600; font-size: 0.85rem; color: #64748b; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+        .cfg-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .cfg-label { font-weight: 700; font-size: 0.85rem; margin: 0 0 8px; }
+        .cfg-input { padding: 10px; border: 1px solid var(--gray-200); border-radius: 8px; box-sizing: border-box; font: inherit; }
+        .cfg-note { font-size: 0.75rem; color: #64748b; margin: 8px 0 0; }
+        .cfg-msg { font-size: 0.8rem; min-height: 1.2em; margin: 10px 0 0; color: var(--danger); }
         .badge { background: #e2e8f0; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: bold; }
     </style>
 </head>
@@ -51,17 +58,12 @@
   <div class="auth-card">
     <h2 style="margin:0 0 6px; display:flex; align-items:center; gap:8px"><i data-lucide="lock"></i> <span id="authTitulo">Acceder</span></h2>
     <div id="authForm">
-      <p style="font-size:0.8rem; color:#64748b; margin:0">Todos los datos se cifran en tu navegador antes de llegar a Firebase.</p>
+      <p style="font-size:0.8rem; color:#64748b; margin:0">Todos los datos se cifran en tu navegador antes de llegar a Firebase. El acceso lo concede el administrador (master).</p>
       <label>EMAIL</label><input id="authEmail" type="email" autocomplete="username">
       <label>CONTRASEÑA</label><input id="authPass" type="password" autocomplete="current-password">
       <label>CLAVE DE CIFRADO</label><input id="authClave" type="password" autocomplete="off">
       <div id="authMsg" class="auth-msg"></div>
       <button id="btnAuth" class="btn" style="background:var(--primary); color:white; width:100%; justify-content:center" onclick="authSubmit()">Entrar</button>
-      <a id="authSwitch" class="auth-link" onclick="authModo(!modoReg)"></a>
-    </div>
-    <div id="authPend" style="display:none">
-      <p style="font-size:0.9rem">Tu cuenta está <b>pendiente de autorización</b> por el administrador. Esta pantalla se actualizará sola cuando la apruebe.</p>
-      <button class="btn" style="background:var(--gray-200); width:100%; justify-content:center" onclick="salir()">Salir</button>
     </div>
   </div>
 </div>
@@ -79,14 +81,8 @@
             <button class="btn" style="background:#0891b2; color:white" onclick="copiarInventario()">
                 <i data-lucide="clipboard-list"></i> Inventario Global
             </button>
-            <button class="btn" style="background:#0d9488; color:white" onclick="toggleModal('modalData', true)">
-                <i data-lucide="database"></i> Datos
-            </button>
-            <button class="btn" style="background:#334155; color:white" onclick="toggleModal('modalConfig', true)">
+            <button class="btn" style="background:#334155; color:white" onclick="cfgTab('fab'); toggleModal('modalConfig', true)">
                 <i data-lucide="settings"></i> Configuración
-            </button>
-            <button id="btnUsuarios" class="btn" style="background:#b45309; color:white; display:none" onclick="toggleModal('modalUsers', true)">
-                <i data-lucide="users"></i> Usuarios <span id="pendBadge" class="badge" style="display:none; background:#fff; color:#b45309"></span>
             </button>
             <button class="btn" style="background:var(--gray-200)" onclick="salir()"><i data-lucide="log-out"></i> Salir</button>
         </div>
@@ -161,62 +157,87 @@
 </div>
 
 <div id="modalConfig" class="modal-overlay">
-    <div class="modal-card" style="max-width:450px">
-        <h3>Gestionar Fabricantes</h3>
-        <div style="display:flex; gap:10px; margin-bottom:20px">
-            <input type="text" id="inputNewProv" placeholder="Nombre fabricante..." style="flex:1; padding:10px; border:1px solid #ddd; border-radius:8px">
-            <button class="btn" style="background:var(--success); color:white" onclick="addProv()"><i data-lucide="plus"></i></button>
+    <div class="modal-card" style="max-width:640px">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px">
+            <h3 style="margin:0; display:flex; align-items:center; gap:8px"><i data-lucide="settings"></i> Configuración</h3>
+            <button class="btn" style="background:var(--gray-200)" onclick="toggleModal('modalConfig', false)">Cerrar</button>
         </div>
-        <div id="modalListProv" style="max-height:300px; overflow-y:auto"></div>
-        <button class="btn" onclick="toggleModal('modalConfig', false)" style="width:100%; margin-top:20px; background:var(--gray-200)">Cerrar</button>
-    </div>
-</div>
 
-<div id="modalUsers" class="modal-overlay">
-    <div class="modal-card" style="max-width:650px">
-        <h3 style="margin-top:0"><i data-lucide="users"></i> Autorización de usuarios</h3>
-        <div id="listaUsuarios"></div>
-        <button class="btn" onclick="toggleModal('modalUsers', false)" style="width:100%; margin-top:20px; background:var(--gray-200); justify-content:center">Cerrar</button>
-    </div>
-</div>
-
-<div id="modalData" class="modal-overlay">
-    <div class="modal-card" style="max-width:520px">
-        <h3 style="margin-top:0"><i data-lucide="database"></i> Exportar / Importar datos</h3>
-
-        <div style="font-weight:700; font-size:0.85rem; margin-bottom:8px">EXPORTAR</div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap">
-            <button class="btn" style="background:var(--primary); color:white" onclick="exportarJSON()">
-                <i data-lucide="download"></i> Copia de seguridad (.json)
-            </button>
-            <button class="btn" style="background:var(--success); color:white" onclick="exportarExcel()">
-                <i data-lucide="file-spreadsheet"></i> Excel (.xlsx)
-            </button>
+        <div id="cfgTabs" class="cfg-tabs master-only" style="display:none">
+            <button class="cfg-tab active" data-t="fab" onclick="cfgTab('fab')">Fabricantes</button>
+            <button class="cfg-tab" data-t="usr" onclick="cfgTab('usr')">Usuarios</button>
+            <button class="cfg-tab" data-t="bak" onclick="cfgTab('bak')">Copia de seguridad</button>
+            <button class="cfg-tab" data-t="key" onclick="cfgTab('key')">Clave de cifrado</button>
         </div>
-        <p style="font-size:0.75rem; color:#64748b; margin:8px 0 0">El .json incluye fabricantes, registros y estantería y sirve para restaurar. El Excel es solo para consulta.</p>
 
-        <hr style="border:none; border-top:1px solid var(--gray-200); margin:20px 0">
+        <section id="cfg-fab" class="cfg-panel">
+            <p class="cfg-label">Gestionar fabricantes</p>
+            <div style="display:flex; gap:10px; margin-bottom:16px">
+                <input type="text" id="inputNewProv" class="cfg-input" placeholder="Nombre fabricante..." style="flex:1">
+                <button class="btn" style="background:var(--success); color:white" onclick="addProv()"><i data-lucide="plus"></i></button>
+            </div>
+            <div id="modalListProv" style="max-height:300px; overflow-y:auto"></div>
+        </section>
 
-        <div style="font-weight:700; font-size:0.85rem; margin-bottom:8px">IMPORTAR COPIA (.json)</div>
-        <input type="file" id="importFile" accept=".json,application/json" style="margin-bottom:10px; max-width:100%">
-        <label style="display:block; font-size:0.85rem; margin-bottom:4px">
-            <input type="radio" name="importMode" value="merge" checked> <b>Fusionar</b>: añade y actualiza, no borra nada
-        </label>
-        <label style="display:block; font-size:0.85rem; margin-bottom:12px">
-            <input type="radio" name="importMode" value="replace"> <b>Reemplazar todo</b>: borra los datos actuales y deja solo los del archivo
-        </label>
-        <button id="btnImportar" class="btn" style="background:#f59e0b; color:white" onclick="importarJSON()">
-            <i data-lucide="upload"></i> Importar
-        </button>
+        <section id="cfg-usr" class="cfg-panel master-only" style="display:none">
+            <p class="cfg-label">Nuevo usuario</p>
+            <div style="display:flex; gap:10px; flex-wrap:wrap">
+                <input type="email" id="nuEmail" class="cfg-input" placeholder="Email" autocomplete="off" style="flex:1 1 180px">
+                <input type="text" id="nuPass" class="cfg-input" placeholder="Contraseña (mín. 8)" autocomplete="off" style="flex:1 1 160px">
+                <button id="btnCrearUsuario" class="btn" style="background:var(--success); color:white" onclick="crearUsuario()"><i data-lucide="user-plus"></i> Crear</button>
+            </div>
+            <div id="nuMsg" class="cfg-msg"></div>
+            <p class="cfg-label" style="margin-top:14px">Usuarios</p>
+            <div id="listaUsuarios" style="max-height:320px; overflow-y:auto"></div>
+        </section>
 
-        <button class="btn" onclick="toggleModal('modalData', false)" style="width:100%; margin-top:20px; background:var(--gray-200); justify-content:center">Cerrar</button>
+        <section id="cfg-bak" class="cfg-panel master-only" style="display:none">
+            <p class="cfg-label">Exportar</p>
+            <div style="display:flex; gap:10px; flex-wrap:wrap">
+                <button class="btn" style="background:var(--primary); color:white" onclick="exportarJSON()">
+                    <i data-lucide="download"></i> Copia de seguridad (.json)
+                </button>
+                <button class="btn" style="background:var(--success); color:white" onclick="exportarExcel()">
+                    <i data-lucide="file-spreadsheet"></i> Excel (.xlsx)
+                </button>
+            </div>
+            <p class="cfg-note">El .json incluye fabricantes, registros y estantería y sirve para restaurar. El Excel es solo para consulta.</p>
+
+            <hr style="border:none; border-top:1px solid var(--gray-200); margin:20px 0">
+
+            <p class="cfg-label">Importar copia (.json)</p>
+            <input type="file" id="importFile" accept=".json,application/json" style="margin-bottom:10px; max-width:100%">
+            <label style="display:block; font-size:0.85rem; margin-bottom:4px">
+                <input type="radio" name="importMode" value="merge" checked> <b>Fusionar</b>: añade y actualiza, no borra nada
+            </label>
+            <label style="display:block; font-size:0.85rem; margin-bottom:12px">
+                <input type="radio" name="importMode" value="replace"> <b>Reemplazar todo</b>: borra los datos actuales y deja solo los del archivo
+            </label>
+            <button id="btnImportar" class="btn" style="background:#f59e0b; color:white" onclick="importarJSON()">
+                <i data-lucide="upload"></i> Importar
+            </button>
+        </section>
+
+        <section id="cfg-key" class="cfg-panel master-only" style="display:none">
+            <p class="cfg-label">Cambiar la clave de cifrado</p>
+            <p class="cfg-note" style="margin:0 0 12px">Se vuelven a cifrar todos los datos con la clave nueva. Hazlo cuando nadie más esté usando la aplicación: al terminar, el resto de usuarios tendrá que volver a entrar con la clave nueva. Si la pierdes, los datos no se pueden recuperar. Descarga antes una copia de seguridad.</p>
+            <div style="display:grid; gap:10px; max-width:360px">
+                <input type="password" id="ckActual" class="cfg-input" placeholder="Clave actual" autocomplete="off">
+                <input type="password" id="ckNueva" class="cfg-input" placeholder="Clave nueva (mín. 8)" autocomplete="new-password">
+                <input type="password" id="ckRep" class="cfg-input" placeholder="Repite la clave nueva" autocomplete="new-password">
+            </div>
+            <div id="ckMsg" class="cfg-msg"></div>
+            <button id="btnCambiarClave" class="btn" style="background:var(--danger); color:white; margin-top:6px" onclick="cambiarClave()">
+                <i data-lucide="key-round"></i> Cambiar clave
+            </button>
+        </section>
     </div>
 </div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getAuth, setPersistence, inMemoryPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-    import { getFirestore, collection, deleteDoc, doc, getDoc, setDoc, updateDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getFirestore, collection, deleteDoc, doc, getDoc, setDoc, updateDoc, onSnapshot, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyDQeJqTUcjbsOPKQIFDl_dTV3K81ampADs",
@@ -229,11 +250,12 @@
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
+    // Segunda instancia solo para dar de alta usuarios sin cerrar la sesión del master
+    const auth2 = getAuth(initializeApp(firebaseConfig, 'altas'));
     const db = getFirestore(app);
     const MASTER_EMAIL = "agamarra@megasur.es";
     let vistaActual = "principal", proveedores = [], registros = [], estanteria = [], usuarios = [];
-    let cryptoKey = null, esMaster = false, unsubs = [];
-    window.modoReg = false;
+    let cryptoKey = null, esMaster = false, unsubs = [], miUid = null, saltActual = null, saliendo = false;
 
     // ---------- CIFRADO (AES-GCM 256, clave derivada con PBKDF2; la clave nunca sale del navegador) ----------
     const $ = id => document.getElementById(id);
@@ -271,70 +293,75 @@
     };
 
     // ---------- ACCESO ----------
-    window.authModo = reg => {
-        modoReg = reg;
-        $('authTitulo').textContent = reg ? 'Solicitar acceso' : 'Acceder';
-        $('btnAuth').textContent = reg ? 'Solicitar acceso' : 'Entrar';
-        $('authSwitch').textContent = reg ? 'Ya tengo cuenta: acceder' : 'No tengo cuenta: solicitar acceso';
-        $('authPass').autocomplete = reg ? 'new-password' : 'current-password';
-        $('authMsg').textContent = '';
-    };
     const errTxt = e => ({
         'auth/invalid-credential': 'Email o contraseña incorrectos.', 'auth/wrong-password': 'Email o contraseña incorrectos.',
-        'auth/user-not-found': 'Email o contraseña incorrectos.', 'auth/email-already-in-use': 'Esa cuenta ya existe: usa "Acceder".',
-        'auth/too-many-requests': 'Demasiados intentos. Espera un momento.', 'auth/operation-not-allowed': 'Activa Email/Contraseña en Firebase Authentication.',
-        'auth/weak-password': 'Contraseña demasiado débil.'
-    })[e.code] || ({ BAD_KEY: 'Clave de cifrado incorrecta.', NO_INIT: 'El administrador aún no ha inicializado el sistema.' })[e.message] || e.message;
+        'auth/user-not-found': 'Email o contraseña incorrectos.', 'auth/too-many-requests': 'Demasiados intentos. Espera un momento.',
+        'auth/operation-not-allowed': 'Activa Email/Contraseña en Firebase Authentication.', 'auth/weak-password': 'Contraseña demasiado débil.',
+        'auth/invalid-email': 'El email no es válido.'
+    })[e.code] || ({
+        BAD_KEY: 'Clave de cifrado incorrecta.', NO_INIT: 'El administrador aún no ha inicializado el sistema.',
+        NO_ACCESS: 'No tienes acceso. Pídeselo al administrador (master).',
+        EXISTE: 'Ese email ya tuvo una cuenta con otra contraseña. Usa esa contraseña original o un email distinto.'
+    })[e.message] || e.message;
 
     window.authSubmit = async () => {
         const email = $('authEmail').value.trim().toLowerCase(), pass = $('authPass').value, clave = $('authClave').value;
         if (!email || !pass || !clave) return $('authMsg').textContent = 'Rellena email, contraseña y clave de cifrado.';
-        if (modoReg && pass.length < 8) return $('authMsg').textContent = 'La contraseña debe tener al menos 8 caracteres.';
         $('btnAuth').disabled = true; $('authMsg').textContent = '';
         try {
             await setPersistence(auth, inMemoryPersistence); // cada recarga exige volver a introducir las 3 credenciales
-            const al = await alias(email);
-            const cred = modoReg ? await createUserWithEmailAndPassword(auth, al, pass) : await signInWithEmailAndPassword(auth, al, pass);
+            const cred = await signInWithEmailAndPassword(auth, await alias(email), pass);
             try { await entrar(cred.user, email, clave); } catch (e) { await signOut(auth); cryptoKey = null; throw e; }
         } catch (e) { console.error(e); $('authMsg').textContent = errTxt(e); }
         finally { $('btnAuth').disabled = false; }
     };
 
     async function entrar(user, email, clave) {
-        esMaster = user.email === await alias(MASTER_EMAIL);
+        esMaster = user.email === await alias(MASTER_EMAIL); miUid = user.uid;
         const metaRef = doc(db, 'config', 'meta'), meta = await getDoc(metaRef);
         if (!meta.exists()) {
             if (!esMaster) throw new Error('NO_INIT');
             const salt = crypto.getRandomValues(new Uint8Array(16));
-            cryptoKey = await deriveKey(clave, salt);
-            await setDoc(metaRef, { salt: toB64(salt), verif: await encText('RMA-OK') });
+            cryptoKey = await deriveKey(clave, salt); saltActual = toB64(salt);
+            await setDoc(metaRef, { salt: saltActual, verif: await encText('RMA-OK') });
         } else {
-            const m = meta.data(); cryptoKey = await deriveKey(clave, fromB64(m.salt));
+            const m = meta.data(); cryptoKey = await deriveKey(clave, fromB64(m.salt)); saltActual = m.salt;
             try { if (await decText(m.verif) !== 'RMA-OK') throw 0; } catch { throw new Error('BAD_KEY'); }
         }
-        const pRef = doc(db, 'usuarios', user.uid); let p = await getDoc(pRef);
+        // Las cuentas solo las crea el master: sin perfil activo no se entra
+        const pRef = doc(db, 'usuarios', user.uid), p = await getDoc(pRef);
         if (!p.exists()) {
-            await setDoc(pRef, { emailEnc: await encText(email), aprobado: esMaster, rol: esMaster ? 'master' : 'user', creado: new Date().toISOString() });
-            p = await getDoc(pRef);
-        }
-        if (esMaster || p.data().aprobado) return abrirApp();
-        $('authForm').style.display = 'none'; $('authPend').style.display = 'block';
-        const un = onSnapshot(pRef, s => { if (s.data()?.aprobado) { un(); abrirApp(); } });
-        unsubs.push(un);
+            if (!esMaster) throw new Error('NO_ACCESS');
+            await setDoc(pRef, { emailEnc: await encText(email), aprobado: true, rol: 'master', creado: new Date().toISOString() });
+        } else if (!esMaster && !p.data().aprobado) throw new Error('NO_ACCESS');
+        abrirApp();
     }
+
+    const expulsar = msg => { if (saliendo) return; saliendo = true; alert(msg); window.salir(); };
 
     function abrirApp() {
         $('authScreen').style.display = 'none'; $('app').style.display = 'block';
+        // Si el master cambia la clave de cifrado, hay que volver a entrar con la nueva
+        unsubs.push(onSnapshot(doc(db, 'config', 'meta'), s => {
+            const m = s.data();
+            if (m && saltActual && m.salt !== saltActual) expulsar('El master ha cambiado la clave de cifrado. Vuelve a entrar con la clave nueva.');
+        }));
         if (esMaster) {
-            $('btnUsuarios').style.display = 'inline-flex';
+            $('cfgTabs').style.display = 'flex';
             unsubs.push(onSnapshot(collection(db, 'usuarios'), async snap => {
                 usuarios = await Promise.all(snap.docs.map(async d => {
                     const x = d.data(); let email = '(ilegible)';
                     try { email = await decText(x.emailEnc); } catch {}
                     return { id: d.id, email, aprobado: x.aprobado, rol: x.rol, creado: x.creado || '' };
                 }));
-                usuarios.sort((a, b) => (a.aprobado - b.aprobado) || a.email.localeCompare(b.email));
+                usuarios.sort((a, b) => ((b.rol === 'master') - (a.rol === 'master')) || a.email.localeCompare(b.email));
                 renderUsuarios();
+            }));
+        } else {
+            // Las secciones del master ni siquiera existen en el DOM para el resto
+            document.querySelectorAll('.master-only').forEach(e => e.remove());
+            unsubs.push(onSnapshot(doc(db, 'usuarios', miUid), s => {
+                if (!s.exists() || !s.data().aprobado) expulsar('El administrador te ha retirado el acceso.');
             }));
         }
         init(); lucide.createIcons();
@@ -342,18 +369,104 @@
 
     window.salir = async () => { unsubs.forEach(u => u()); await signOut(auth); location.reload(); };
 
-    window.renderUsuarios = () => {
-        const pend = usuarios.filter(u => !u.aprobado).length;
-        const bd = $('pendBadge'); bd.textContent = pend; bd.style.display = pend ? 'inline' : 'none';
-        $('listaUsuarios').innerHTML = usuarios.map(u => `<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px; border-bottom:1px solid #eee">
-            <div><b>${esc(u.email)}</b> ${u.rol === 'master' ? '<span class="badge">MASTER</span>' : ''}<br><small style="color:#64748b">${esc(u.creado.slice(0, 10))} · ${u.aprobado ? '<span style="color:var(--success)">Autorizado</span>' : '<span style="color:var(--warning)">Pendiente</span>'}</small></div>
-            ${u.rol === 'master' ? '' : `<div style="display:flex; gap:6px">
-                <button class="btn" style="background:${u.aprobado ? 'var(--warning)' : 'var(--success)'}; color:white; padding:6px 12px" onclick="autorizarUsuario('${u.id}', ${!u.aprobado})">${u.aprobado ? 'Revocar' : 'Autorizar'}</button>
-                <button class="btn" style="color:var(--danger); padding:6px 10px" onclick="eliminarUsuario('${u.id}')">x</button></div>`}
-        </div>`).join('') || '<p style="text-align:center; color:#94a3b8">Sin usuarios.</p>';
+    window.cfgTab = t => {
+        document.querySelectorAll('.cfg-tab').forEach(b => b.classList.toggle('active', b.dataset.t === t));
+        document.querySelectorAll('.cfg-panel').forEach(p => p.style.display = p.id === 'cfg-' + t ? 'block' : 'none');
     };
-    window.autorizarUsuario = (id, v) => updateDoc(doc(db, 'usuarios', id), { aprobado: v });
-    window.eliminarUsuario = id => { if (confirm('¿Eliminar este usuario? Perderá el acceso.')) deleteDoc(doc(db, 'usuarios', id)); };
+
+    // ---------- USUARIOS (solo master) ----------
+    window.renderUsuarios = () => {
+        $('listaUsuarios').innerHTML = usuarios.map(u => `<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px; border-bottom:1px solid #eee">
+            <div><b>${esc(u.email)}</b> ${u.rol === 'master' ? '<span class="badge">MASTER</span>' : ''}<br><small style="color:#64748b">${esc(u.creado.slice(0, 10))} · ${u.aprobado ? '<span style="color:var(--success)">Activo</span>' : '<span style="color:var(--warning)">Desactivado</span>'}</small></div>
+            ${u.rol === 'master' ? '' : `<div style="display:flex; gap:6px">
+                <button class="btn" style="background:${u.aprobado ? 'var(--warning)' : 'var(--success)'}; color:white; padding:6px 12px" onclick="autorizarUsuario('${u.id}', ${!u.aprobado})">${u.aprobado ? 'Desactivar' : 'Activar'}</button>
+                <button class="btn" style="color:var(--danger); padding:6px 10px" onclick="eliminarUsuario('${u.id}')"><i data-lucide="trash-2" style="width:14px"></i></button></div>`}
+        </div>`).join('') || '<p style="text-align:center; color:#94a3b8">Sin usuarios.</p>';
+        lucide.createIcons();
+    };
+
+    window.crearUsuario = async () => {
+        if (!esMaster) return;
+        const email = $('nuEmail').value.trim().toLowerCase(), pass = $('nuPass').value, msg = $('nuMsg');
+        msg.textContent = '';
+        if (!/^\S+@\S+\.\S+$/.test(email)) return msg.textContent = 'Introduce un email válido.';
+        if (email === MASTER_EMAIL) return msg.textContent = 'Ese email es el del master.';
+        if (usuarios.some(u => u.email === email)) return msg.textContent = 'Ese usuario ya existe.';
+        if (pass.length < 8) return msg.textContent = 'La contraseña debe tener al menos 8 caracteres.';
+        $('btnCrearUsuario').disabled = true;
+        try {
+            await setPersistence(auth2, inMemoryPersistence);
+            const al = await alias(email); let uid;
+            try { uid = (await createUserWithEmailAndPassword(auth2, al, pass)).user.uid; }
+            catch (e) {
+                if (e.code !== 'auth/email-already-in-use') throw e;
+                // Cuenta de Auth de un usuario eliminado antes: se reutiliza si la contraseña coincide
+                try { uid = (await signInWithEmailAndPassword(auth2, al, pass)).user.uid; } catch { throw new Error('EXISTE'); }
+            }
+            await signOut(auth2);
+            await setDoc(doc(db, 'usuarios', uid), { emailEnc: await encText(email), aprobado: true, rol: 'user', creado: new Date().toISOString() });
+            $('nuEmail').value = ''; $('nuPass').value = '';
+            window.showToast(`<b>Usuario creado</b><br><small>${esc(email)}</small>`);
+        } catch (e) { console.error(e); msg.textContent = errTxt(e); }
+        finally { $('btnCrearUsuario').disabled = false; }
+    };
+    window.autorizarUsuario = (id, v) => { if (esMaster) return updateDoc(doc(db, 'usuarios', id), { aprobado: v }); };
+    window.eliminarUsuario = id => { if (esMaster && confirm('¿Eliminar este usuario? Perderá el acceso.')) deleteDoc(doc(db, 'usuarios', id)); };
+
+    // ---------- CAMBIO DE CLAVE DE CIFRADO (solo master) ----------
+    window.cambiarClave = async () => {
+        if (!esMaster) return;
+        const actual = $('ckActual').value, nueva = $('ckNueva').value, rep = $('ckRep').value, msg = $('ckMsg');
+        const estado = (t, ok) => { msg.style.color = ok ? 'var(--success)' : ''; msg.textContent = t; };
+        estado('');
+        if (!actual || !nueva || !rep) return estado('Rellena los tres campos.');
+        if (nueva.length < 8) return estado('La clave nueva debe tener al menos 8 caracteres.');
+        if (nueva !== rep) return estado('La clave nueva y su repetición no coinciden.');
+        if (nueva === actual) return estado('La clave nueva es igual a la actual.');
+
+        const metaRef = doc(db, 'config', 'meta'), m = (await getDoc(metaRef)).data();
+        try {
+            const k = await deriveKey(actual, fromB64(m.salt)), u = fromB64(m.verif);
+            if (td.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: u.slice(0, 12) }, k, u.slice(12))) !== 'RMA-OK') throw 0;
+        } catch { return estado('La clave actual no es correcta.'); }
+        if (!confirm('Se volverán a cifrar todos los datos con la clave nueva y se cerrará la sesión del resto de usuarios.\n\n¿Continuar?')) return;
+
+        $('btnCambiarClave').disabled = true; estado('Re-cifrando datos, no cierres la ventana…', true);
+        const claveAnterior = cryptoKey; let ops = [];
+        try {
+            let omitidos = 0;
+            for (const col of ['proveedores', 'registros_rma', 'estanteria']) {
+                for (const d of (await getDocs(collection(db, col))).docs) {
+                    const o = await decSnap(d);
+                    if (o) ops.push({ col, id: d.id, data: strip(o) }); else omitidos++;
+                }
+            }
+            const emails = [];
+            for (const d of (await getDocs(collection(db, 'usuarios'))).docs) {
+                try { emails.push({ id: d.id, email: await decText(d.data().emailEnc) }); } catch {}
+            }
+
+            const salt = crypto.getRandomValues(new Uint8Array(16));
+            cryptoKey = await deriveKey(nueva, salt);
+            saltActual = toB64(salt); // así esta sesión no se expulsa a sí misma
+            await batchEnc(ops);
+            for (let i = 0; i < emails.length; i += 400) {
+                const b = writeBatch(db);
+                for (const x of emails.slice(i, i + 400)) b.update(doc(db, 'usuarios', x.id), { emailEnc: await encText(x.email) });
+                await b.commit();
+            }
+            await setDoc(metaRef, { salt: saltActual, verif: await encText('RMA-OK') });
+
+            ['ckActual', 'ckNueva', 'ckRep'].forEach(id => $(id).value = '');
+            estado(`Clave cambiada. ${ops.length} elemento(s) re-cifrados${omitidos ? ` (${omitidos} ilegible(s) con la clave anterior, sin tocar)` : ''}.`, true);
+            window.showToast('<b>Clave de cifrado cambiada</b>');
+        } catch (e) {
+            console.error(e);
+            // Intento de vuelta atrás con la clave anterior
+            try { cryptoKey = claveAnterior; saltActual = m.salt; await batchEnc(ops); estado('Error al cambiar la clave: ' + e.message + '. Se han restaurado los datos anteriores.'); }
+            catch { estado('Error al cambiar la clave y no se pudo deshacer. Restaura desde tu copia de seguridad.'); }
+        } finally { $('btnCambiarClave').disabled = false; }
+    };
 
     const listen = (col, cb) => onSnapshot(collection(db, col), async snap => cb((await Promise.all(snap.docs.map(decSnap))).filter(Boolean)), e => console.error(col, e));
     function init() {
@@ -569,6 +682,7 @@
     };
 
     window.exportarJSON = () => {
+        if (!esMaster) return;
         if (!proveedores.length && !registros.length && !estanteria.length) return window.showToast("No hay datos para exportar");
         const backup = {
             formato: "rma-manager-backup", version: 1, exportado: new Date().toISOString(),
@@ -579,6 +693,7 @@
     };
 
     window.exportarExcel = () => {
+        if (!esMaster) return;
         if (!registros.length && !estanteria.length) return window.showToast("No hay datos para exportar");
         const wb = XLSX.utils.book_new();
 
@@ -599,6 +714,7 @@
     };
 
     window.importarJSON = async () => {
+        if (!esMaster) return;
         const fichero = document.getElementById('importFile').files[0];
         if (!fichero) return alert("Selecciona primero un archivo .json");
 
@@ -636,7 +752,6 @@
             }
             await batchEnc(ops);
             document.getElementById('importFile').value = '';
-            toggleModal('modalData', false);
             window.showToast(`<b>Importación completada</b><br><small>${resumen}</small>`);
         } catch (err) {
             console.error(err);
@@ -679,7 +794,7 @@
     };
 
     ['authEmail', 'authPass', 'authClave'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') authSubmit(); }));
-    authModo(false); lucide.createIcons();
+    lucide.createIcons();
 </script>
 </body>
 </html>
