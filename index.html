@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RMA Manager Pro - Smart Logistics</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --primary: #2563eb; --success: #10b981; --danger: #ef4444; --warning: #f59e0b;
+            --gray-50: #f8fafc; --gray-100: #f1f5f9; --gray-200: #e2e8f0; --text-main: #1e293b;
+        }
+        body { font-family: 'Inter', sans-serif; background: var(--gray-50); color: var(--text-main); margin: 0; padding: 20px; }
+        .container { max-width: 1300px; margin: 0 auto; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .auth-screen { position: fixed; inset: 0; background: var(--gray-50); display: grid; place-items: center; z-index: 3000; padding: 20px; }
+        .auth-card { background: white; width: 100%; max-width: 400px; border-radius: 16px; border: 1px solid var(--gray-200); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); padding: 30px; }
+        .auth-card label { display: block; font-size: 0.75rem; font-weight: 700; margin: 14px 0 4px; }
+        .auth-card input { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 8px; border: 1px solid var(--gray-200); }
+        .auth-msg { color: var(--danger); font-size: 0.8rem; min-height: 1.2em; margin: 12px 0 4px; }
+        .auth-link { color: var(--primary); cursor: pointer; font-size: 0.85rem; display: block; text-align: center; margin-top: 14px; }
+        .card { background: white; border-radius: 12px; border: 1px solid var(--gray-200); box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; overflow: hidden; }
+        .card-content { padding: 20px; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: flex-end; }
+        .search-bar { position: relative; margin-top: 15px; }
+        .search-bar input { padding: 12px 15px 12px 45px; width: 100%; border-radius: 10px; border: 1px solid var(--gray-200); outline: none; }
+        .search-bar i { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
+        .tabs-wrapper { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; justify-content: center; padding: 5px 0; }
+        .tab-btn { white-space: nowrap; padding: 10px 18px; border-radius: 10px; border: 1px solid var(--gray-200); background: white; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500; }
+        .tab-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: var(--gray-50); text-align: left; padding: 14px; font-size: 0.75rem; color: #64748b; text-transform: uppercase; }
+        td { padding: 12px 14px; border-bottom: 1px solid var(--gray-100); font-size: 0.85rem; }
+        .btn { padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 8px; transition: 0.2s; text-decoration: none; font-size: 0.9rem; }
+        #toast { position: fixed; bottom: 20px; right: 20px; background: #1e293b; color: white; padding: 16px 24px; border-radius: 12px; display: none; z-index: 2000; border-left: 4px solid var(--success); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2); }
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); place-items: center; z-index: 1000; overflow-y: auto; padding: 20px; }
+        .modal-card { background: white; width: 100%; max-width: 1000px; border-radius: 16px; padding: 25px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
+        .shelf-row { border: 1px solid var(--gray-200); border-radius: 10px; margin-bottom: 10px; background: white; }
+        .shelf-header { display: grid; grid-template-columns: 1fr 1.5fr 1fr 2fr auto; gap: 15px; padding: 15px; align-items: center; cursor: pointer; }
+        .shelf-details { display: none; padding: 15px; background: var(--gray-50); border-top: 1px solid var(--gray-200); }
+        .shelf-input { padding: 6px; border: 1px solid var(--gray-200); border-radius: 5px; width: 100%; }
+        .badge { background: #e2e8f0; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div id="authScreen" class="auth-screen">
+  <div class="auth-card">
+    <h2 style="margin:0 0 6px; display:flex; align-items:center; gap:8px"><i data-lucide="lock"></i> <span id="authTitulo">Acceder</span></h2>
+    <div id="authForm">
+      <p style="font-size:0.8rem; color:#64748b; margin:0">Todos los datos se cifran en tu navegador antes de llegar a Firebase.</p>
+      <label>EMAIL</label><input id="authEmail" type="email" autocomplete="username">
+      <label>CONTRASEÑA</label><input id="authPass" type="password" autocomplete="current-password">
+      <label>CLAVE DE CIFRADO</label><input id="authClave" type="password" autocomplete="off">
+      <div id="authMsg" class="auth-msg"></div>
+      <button id="btnAuth" class="btn" style="background:var(--primary); color:white; width:100%; justify-content:center" onclick="authSubmit()">Entrar</button>
+      <a id="authSwitch" class="auth-link" onclick="authModo(!modoReg)"></a>
+    </div>
+    <div id="authPend" style="display:none">
+      <p style="font-size:0.9rem">Tu cuenta está <b>pendiente de autorización</b> por el administrador. Esta pantalla se actualizará sola cuando la apruebe.</p>
+      <button class="btn" style="background:var(--gray-200); width:100%; justify-content:center" onclick="salir()">Salir</button>
+    </div>
+  </div>
+</div>
+
+<div class="container" id="app" style="display:none">
+    <header>
+        <h1><i data-lucide="package-search"></i> RMA Manager Pro</h1>
+        <div class="header-actions">
+            <a href="https://a72786990-spec.github.io/garantias/" target="_blank" class="btn" style="background:#6d28d9; color:white">
+                <i data-lucide="shield-check"></i> Garantías
+            </a>
+            <button class="btn" style="background:#475569; color:white" onclick="toggleModal('modalShelf', true)">
+                <i data-lucide="archive"></i> Estantería
+            </button>
+            <button class="btn" style="background:#0891b2; color:white" onclick="copiarInventario()">
+                <i data-lucide="clipboard-list"></i> Inventario Global
+            </button>
+            <button class="btn" style="background:#0d9488; color:white" onclick="toggleModal('modalData', true)">
+                <i data-lucide="database"></i> Datos
+            </button>
+            <button class="btn" style="background:#334155; color:white" onclick="toggleModal('modalConfig', true)">
+                <i data-lucide="settings"></i> Configuración
+            </button>
+            <button id="btnUsuarios" class="btn" style="background:#b45309; color:white; display:none" onclick="toggleModal('modalUsers', true)">
+                <i data-lucide="users"></i> Usuarios <span id="pendBadge" class="badge" style="display:none; background:#fff; color:#b45309"></span>
+            </button>
+            <button class="btn" style="background:var(--gray-200)" onclick="salir()"><i data-lucide="log-out"></i> Salir</button>
+        </div>
+    </header>
+
+    <div class="card card-content">
+        <div class="form-grid">
+            <div>
+                <label style="font-size:0.75rem; font-weight:700">ID RMA</label>
+                <input type="text" id="rmaInput" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--gray-200)" placeholder="Ej: RMA-2024">
+            </div>
+            <div>
+                <label style="font-size:0.75rem; font-weight:700">ARCHIVO EXCEL</label>
+                <input type="file" id="fileInput" accept=".xlsx, .xls">
+            </div>
+            <button class="btn" style="background:var(--primary); color:white" onclick="procesarExcel()">Cargar Datos</button>
+        </div>
+        <div class="search-bar">
+            <i data-lucide="search"></i>
+            <input type="text" id="globalSearch" placeholder="Buscar por RMA, Serie, Artículo..." oninput="renderTabla()">
+        </div>
+    </div>
+
+    <div id="tabsFabricantes" class="tabs-wrapper"></div>
+
+    <div id="bulkAssignBar" style="display:none; gap:10px; align-items:center; margin-bottom:15px; background:white; border:1px solid var(--gray-200); border-radius:10px; padding:12px 15px">
+        <i data-lucide="wand-2"></i>
+        <span style="font-weight:600; font-size:0.85rem">Asignar todos los pendientes a:</span>
+        <select id="bulkProvSelect" style="padding:8px; border-radius:6px; border:1px solid var(--gray-200); flex:1; max-width:300px"></select>
+        <button class="btn" style="background:var(--primary); color:white" onclick="asignarTodosPendientes()">
+            <i data-lucide="check-check"></i> Asignar a todos
+        </button>
+    </div>
+
+    <div id="contenedorCopiado" style="display:none; justify-content:space-between; align-items:center; margin-bottom:15px">
+        <button class="btn" style="background:#6366f1; color:white" onclick="mandarAEstanteria()">
+            <i data-lucide="truck"></i> Envío a proveedor y COPIAR
+        </button>
+        <button class="btn" style="background:var(--danger); color:white" onclick="eliminarTodoFabricante()">
+            <i data-lucide="trash-2"></i> Eliminar lote actual
+        </button>
+    </div>
+
+    <div class="card" style="overflow-x:auto">
+        <table>
+            <thead>
+                <tr>
+                    <th>RMA</th><th>CDAR</th><th>Artículo</th><th>Nº Serie</th><th>Fabricante / Estado</th><th style="text-align:right">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="listaCuerpo"></tbody>
+        </table>
+    </div>
+
+    <div id="areaAcciones" style="text-align:right; margin-top:15px">
+        <button class="btn" style="background:var(--success); color:white" onclick="enviarLotes()">
+            <i data-lucide="send"></i> Enviar a Lotes
+        </button>
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="modalShelf" class="modal-overlay">
+    <div class="modal-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
+            <h2 style="margin:0"><i data-lucide="archive"></i> Estantería de Envíos</h2>
+            <button class="btn" onclick="toggleModal('modalShelf', false)">Cerrar</button>
+        </div>
+        <div id="shelfContainer"></div>
+    </div>
+</div>
+
+<div id="modalConfig" class="modal-overlay">
+    <div class="modal-card" style="max-width:450px">
+        <h3>Gestionar Fabricantes</h3>
+        <div style="display:flex; gap:10px; margin-bottom:20px">
+            <input type="text" id="inputNewProv" placeholder="Nombre fabricante..." style="flex:1; padding:10px; border:1px solid #ddd; border-radius:8px">
+            <button class="btn" style="background:var(--success); color:white" onclick="addProv()"><i data-lucide="plus"></i></button>
+        </div>
+        <div id="modalListProv" style="max-height:300px; overflow-y:auto"></div>
+        <button class="btn" onclick="toggleModal('modalConfig', false)" style="width:100%; margin-top:20px; background:var(--gray-200)">Cerrar</button>
+    </div>
+</div>
+
+<div id="modalUsers" class="modal-overlay">
+    <div class="modal-card" style="max-width:650px">
+        <h3 style="margin-top:0"><i data-lucide="users"></i> Autorización de usuarios</h3>
+        <div id="listaUsuarios"></div>
+        <button class="btn" onclick="toggleModal('modalUsers', false)" style="width:100%; margin-top:20px; background:var(--gray-200); justify-content:center">Cerrar</button>
+    </div>
+</div>
+
+<div id="modalData" class="modal-overlay">
+    <div class="modal-card" style="max-width:520px">
+        <h3 style="margin-top:0"><i data-lucide="database"></i> Exportar / Importar datos</h3>
+
+        <div style="font-weight:700; font-size:0.85rem; margin-bottom:8px">EXPORTAR</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap">
+            <button class="btn" style="background:var(--primary); color:white" onclick="exportarJSON()">
+                <i data-lucide="download"></i> Copia de seguridad (.json)
+            </button>
+            <button class="btn" style="background:var(--success); color:white" onclick="exportarExcel()">
+                <i data-lucide="file-spreadsheet"></i> Excel (.xlsx)
+            </button>
+        </div>
+        <p style="font-size:0.75rem; color:#64748b; margin:8px 0 0">El .json incluye fabricantes, registros y estantería y sirve para restaurar. El Excel es solo para consulta.</p>
+
+        <hr style="border:none; border-top:1px solid var(--gray-200); margin:20px 0">
+
+        <div style="font-weight:700; font-size:0.85rem; margin-bottom:8px">IMPORTAR COPIA (.json)</div>
+        <input type="file" id="importFile" accept=".json,application/json" style="margin-bottom:10px; max-width:100%">
+        <label style="display:block; font-size:0.85rem; margin-bottom:4px">
+            <input type="radio" name="importMode" value="merge" checked> <b>Fusionar</b>: añade y actualiza, no borra nada
+        </label>
+        <label style="display:block; font-size:0.85rem; margin-bottom:12px">
+            <input type="radio" name="importMode" value="replace"> <b>Reemplazar todo</b>: borra los datos actuales y deja solo los del archivo
+        </label>
+        <button id="btnImportar" class="btn" style="background:#f59e0b; color:white" onclick="importarJSON()">
+            <i data-lucide="upload"></i> Importar
+        </button>
+
+        <button class="btn" onclick="toggleModal('modalData', false)" style="width:100%; margin-top:20px; background:var(--gray-200); justify-content:center">Cerrar</button>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getAuth, setPersistence, inMemoryPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { getFirestore, collection, deleteDoc, doc, getDoc, setDoc, updateDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyDQeJqTUcjbsOPKQIFDl_dTV3K81ampADs",
+        authDomain: "proveedores-82bb9.firebaseapp.com",
+        projectId: "proveedores-82bb9",
+        storageBucket: "proveedores-82bb9.firebasestorage.app",
+        messagingSenderId: "708434189205",
+        appId: "1:708434189205:web:5b4cfeee4f824c4911b49c"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const MASTER_EMAIL = "agamarra@megasur.es";
+    let vistaActual = "principal", proveedores = [], registros = [], estanteria = [], usuarios = [];
+    let cryptoKey = null, esMaster = false, unsubs = [];
+    window.modoReg = false;
+
+    // ---------- CIFRADO (AES-GCM 256, clave derivada con PBKDF2; la clave nunca sale del navegador) ----------
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const te = new TextEncoder(), td = new TextDecoder();
+    const toB64 = buf => { const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+    const fromB64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+    const sha256hex = async x => [...new Uint8Array(await crypto.subtle.digest('SHA-256', te.encode(x)))].map(n => n.toString(16).padStart(2, '0')).join('');
+    // Firebase Auth solo ve un alias (hash del email), nunca el email real
+    const alias = async email => (await sha256hex('rma-manager|' + email.trim().toLowerCase())) + '@rma-manager.app';
+    const deriveKey = async (pass, salt) => {
+        const base = await crypto.subtle.importKey('raw', te.encode(pass), 'PBKDF2', false, ['deriveKey']);
+        return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+    };
+    const encText = async txt => {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, te.encode(txt)));
+        const out = new Uint8Array(12 + ct.length); out.set(iv); out.set(ct, 12);
+        return toB64(out);
+    };
+    const decText = async s => { const u = fromB64(s); return td.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: u.slice(0, 12) }, cryptoKey, u.slice(12))); };
+    const encObj = async o => ({ c: await encText(JSON.stringify(o)) });
+    const decSnap = async d => { try { return { id: d.id, ...JSON.parse(await decText(d.data().c)) }; } catch { return null; } };
+    const strip = ({ id, ...r }) => r;
+    const newId = col => doc(collection(db, col)).id;
+    const setEnc = async (col, id, o) => setDoc(doc(db, col, id), await encObj(o));
+    const addEnc = async (col, o) => setEnc(col, newId(col), o);
+    const patch = (col, arr, id, p) => { const cur = arr.find(x => x.id === id); return cur ? setEnc(col, id, { ...strip(cur), ...p }) : null; };
+    const batchEnc = async ops => {
+        for (let i = 0; i < ops.length; i += 400) {
+            const b = writeBatch(db);
+            for (const o of ops.slice(i, i + 400)) { const ref = doc(db, o.col, o.id); if (o.del) b.delete(ref); else b.set(ref, await encObj(o.data)); }
+            await b.commit();
+        }
+    };
+
+    // ---------- ACCESO ----------
+    window.authModo = reg => {
+        modoReg = reg;
+        $('authTitulo').textContent = reg ? 'Solicitar acceso' : 'Acceder';
+        $('btnAuth').textContent = reg ? 'Solicitar acceso' : 'Entrar';
+        $('authSwitch').textContent = reg ? 'Ya tengo cuenta: acceder' : 'No tengo cuenta: solicitar acceso';
+        $('authPass').autocomplete = reg ? 'new-password' : 'current-password';
+        $('authMsg').textContent = '';
+    };
+    const errTxt = e => ({
+        'auth/invalid-credential': 'Email o contraseña incorrectos.', 'auth/wrong-password': 'Email o contraseña incorrectos.',
+        'auth/user-not-found': 'Email o contraseña incorrectos.', 'auth/email-already-in-use': 'Esa cuenta ya existe: usa "Acceder".',
+        'auth/too-many-requests': 'Demasiados intentos. Espera un momento.', 'auth/operation-not-allowed': 'Activa Email/Contraseña en Firebase Authentication.',
+        'auth/weak-password': 'Contraseña demasiado débil.'
+    })[e.code] || ({ BAD_KEY: 'Clave de cifrado incorrecta.', NO_INIT: 'El administrador aún no ha inicializado el sistema.' })[e.message] || e.message;
+
+    window.authSubmit = async () => {
+        const email = $('authEmail').value.trim().toLowerCase(), pass = $('authPass').value, clave = $('authClave').value;
+        if (!email || !pass || !clave) return $('authMsg').textContent = 'Rellena email, contraseña y clave de cifrado.';
+        if (modoReg && pass.length < 8) return $('authMsg').textContent = 'La contraseña debe tener al menos 8 caracteres.';
+        $('btnAuth').disabled = true; $('authMsg').textContent = '';
+        try {
+            await setPersistence(auth, inMemoryPersistence); // cada recarga exige volver a introducir las 3 credenciales
+            const al = await alias(email);
+            const cred = modoReg ? await createUserWithEmailAndPassword(auth, al, pass) : await signInWithEmailAndPassword(auth, al, pass);
+            try { await entrar(cred.user, email, clave); } catch (e) { await signOut(auth); cryptoKey = null; throw e; }
+        } catch (e) { console.error(e); $('authMsg').textContent = errTxt(e); }
+        finally { $('btnAuth').disabled = false; }
+    };
+
+    async function entrar(user, email, clave) {
+        esMaster = user.email === await alias(MASTER_EMAIL);
+        const metaRef = doc(db, 'config', 'meta'), meta = await getDoc(metaRef);
+        if (!meta.exists()) {
+            if (!esMaster) throw new Error('NO_INIT');
+            const salt = crypto.getRandomValues(new Uint8Array(16));
+            cryptoKey = await deriveKey(clave, salt);
+            await setDoc(metaRef, { salt: toB64(salt), verif: await encText('RMA-OK') });
+        } else {
+            const m = meta.data(); cryptoKey = await deriveKey(clave, fromB64(m.salt));
+            try { if (await decText(m.verif) !== 'RMA-OK') throw 0; } catch { throw new Error('BAD_KEY'); }
+        }
+        const pRef = doc(db, 'usuarios', user.uid); let p = await getDoc(pRef);
+        if (!p.exists()) {
+            await setDoc(pRef, { emailEnc: await encText(email), aprobado: esMaster, rol: esMaster ? 'master' : 'user', creado: new Date().toISOString() });
+            p = await getDoc(pRef);
+        }
+        if (esMaster || p.data().aprobado) return abrirApp();
+        $('authForm').style.display = 'none'; $('authPend').style.display = 'block';
+        const un = onSnapshot(pRef, s => { if (s.data()?.aprobado) { un(); abrirApp(); } });
+        unsubs.push(un);
+    }
+
+    function abrirApp() {
+        $('authScreen').style.display = 'none'; $('app').style.display = 'block';
+        if (esMaster) {
+            $('btnUsuarios').style.display = 'inline-flex';
+            unsubs.push(onSnapshot(collection(db, 'usuarios'), async snap => {
+                usuarios = await Promise.all(snap.docs.map(async d => {
+                    const x = d.data(); let email = '(ilegible)';
+                    try { email = await decText(x.emailEnc); } catch {}
+                    return { id: d.id, email, aprobado: x.aprobado, rol: x.rol, creado: x.creado || '' };
+                }));
+                usuarios.sort((a, b) => (a.aprobado - b.aprobado) || a.email.localeCompare(b.email));
+                renderUsuarios();
+            }));
+        }
+        init(); lucide.createIcons();
+    }
+
+    window.salir = async () => { unsubs.forEach(u => u()); await signOut(auth); location.reload(); };
+
+    window.renderUsuarios = () => {
+        const pend = usuarios.filter(u => !u.aprobado).length;
+        const bd = $('pendBadge'); bd.textContent = pend; bd.style.display = pend ? 'inline' : 'none';
+        $('listaUsuarios').innerHTML = usuarios.map(u => `<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px; border-bottom:1px solid #eee">
+            <div><b>${esc(u.email)}</b> ${u.rol === 'master' ? '<span class="badge">MASTER</span>' : ''}<br><small style="color:#64748b">${esc(u.creado.slice(0, 10))} · ${u.aprobado ? '<span style="color:var(--success)">Autorizado</span>' : '<span style="color:var(--warning)">Pendiente</span>'}</small></div>
+            ${u.rol === 'master' ? '' : `<div style="display:flex; gap:6px">
+                <button class="btn" style="background:${u.aprobado ? 'var(--warning)' : 'var(--success)'}; color:white; padding:6px 12px" onclick="autorizarUsuario('${u.id}', ${!u.aprobado})">${u.aprobado ? 'Revocar' : 'Autorizar'}</button>
+                <button class="btn" style="color:var(--danger); padding:6px 10px" onclick="eliminarUsuario('${u.id}')">x</button></div>`}
+        </div>`).join('') || '<p style="text-align:center; color:#94a3b8">Sin usuarios.</p>';
+    };
+    window.autorizarUsuario = (id, v) => updateDoc(doc(db, 'usuarios', id), { aprobado: v });
+    window.eliminarUsuario = id => { if (confirm('¿Eliminar este usuario? Perderá el acceso.')) deleteDoc(doc(db, 'usuarios', id)); };
+
+    const listen = (col, cb) => onSnapshot(collection(db, col), async snap => cb((await Promise.all(snap.docs.map(decSnap))).filter(Boolean)), e => console.error(col, e));
+    function init() {
+        unsubs.push(listen('proveedores', r => {
+            proveedores = r.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+            renderModalProvs(); renderTabs(); renderTabla();
+        }));
+        unsubs.push(listen('registros_rma', r => { registros = r; renderTabs(); renderTabla(); }));
+        unsubs.push(listen('estanteria', r => { estanteria = r; renderShelf(); }));
+    }
+
+    window.showToast = (html) => {
+        const t = document.getElementById('toast');
+        t.innerHTML = `<div style="display:flex; align-items:center; gap:12px"><i data-lucide="info"></i><div>${html}</div></div>`;
+        t.style.display = 'block'; lucide.createIcons();
+        setTimeout(() => { t.style.display = 'none'; }, 4000);
+    };
+
+    window.mandarAEstanteria = async () => {
+        const filtrados = registros.filter(r => r.status === 'enviado' && r.proveedor === vistaActual);
+        if(!filtrados.length) return;
+
+        let content = ""; 
+        filtrados.forEach(r => {
+            const row = [
+                r.RMA_Asociado || "", 
+                r.Cdar || r.CodAr || "", 
+                r["Nombre Articulo"] || r["Denominacion Articulo"] || "", 
+                r["Nº Serie"] || "", 
+                "", "", 
+                r["Incidencia Averia"] || "", 
+                "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
+            ];
+            content += row.join("\t") + "\n";
+        });
+
+        try {
+            await navigator.clipboard.writeText(content);
+            await batchEnc([
+                { col: "estanteria", id: newId("estanteria"), data: { envio: "", fabricante: vistaActual, fecha: new Date().toLocaleString(), observaciones: "", items: filtrados } },
+                ...filtrados.map(r => ({ col: "registros_rma", id: r.id, data: { ...strip(r), status: 'estanteria' } }))
+            ]);
+            window.showToast(`<b>Lote de ${esc(vistaActual)} enviado</b><br>y COPIADO para Excel.`);
+            vistaActual = "principal";
+        } catch (err) {
+            alert("Error al copiar.");
+        }
+    };
+
+    // --- FUNCIÓN ACTUALIZADA: INVENTARIO GLOBAL TOTAL ---
+    window.copiarInventario = () => {
+        // Ahora procesamos TODOS los registros (pendientes, enviados y en estantería)
+        const conteo = {};
+        registros.forEach(r => { 
+            const cod = r.Cdar || r.CodAr || "SIN_COD"; 
+            conteo[cod] = (conteo[cod] || 0) + 1; 
+        });
+        
+        let content = ""; 
+        Object.keys(conteo).forEach(cod => {
+            content += [cod, "", conteo[cod], "", "", "", "", "", "", "", "", "", ""].join("\t") + "\n";
+        });
+        
+        navigator.clipboard.writeText(content).then(() => {
+            const totalArticulos = registros.length;
+            showToast(`<b>Inventario copiado</b><br>Total: ${totalArticulos} artículos.`);
+        });
+    };
+
+    window.enviarLotes = async () => {
+        const aEnviar = registros.filter(r => r.status === 'pendiente' && r.proveedor !== 'pendiente');
+        if(!aEnviar.length) return;
+        const resumen = {};
+        aEnviar.forEach(r => {
+            if(!resumen[r.proveedor]) {
+                const previos = registros.filter(reg => reg.proveedor === r.proveedor && reg.status === 'enviado').length;
+                resumen[r.proveedor] = { previos, nuevos: 0 };
+            }
+            resumen[r.proveedor].nuevos++;
+        });
+        await batchEnc(aEnviar.map(r => ({ col: "registros_rma", id: r.id, data: { ...strip(r), status: 'enviado' } })));
+        let msg = `<b>Lotes cargados correctamente</b><br>`;
+        Object.keys(resumen).forEach(p => {
+            msg += `<small>${esc(p)}: ${resumen[p].previos} + <b style="color:#10b981">(+${resumen[p].nuevos})</b></small><br>`;
+        });
+        window.showToast(msg);
+    };
+
+    window.renderTabla = () => {
+        const tbody = document.getElementById('listaCuerpo');
+        const search = document.getElementById('globalSearch').value.toLowerCase();
+        tbody.innerHTML = '';
+        document.getElementById('contenedorCopiado').style.display = (vistaActual !== 'principal' && !search) ? 'flex' : 'none';
+        const filtrados = registros.filter(r => {
+            if (search) return r.status !== 'estanteria' && Object.values(r).some(v => String(v).toLowerCase().includes(search));
+            return (vistaActual === 'principal') ? r.status === 'pendiente' : (r.status === 'enviado' && r.proveedor === vistaActual);
+        });
+        filtrados.forEach(r => {
+            const tr = document.createElement('tr');
+            let options = `<option value="pendiente" ${r.proveedor === 'pendiente' ? 'selected' : ''}>Asignar proveedor...</option>`;
+            proveedores.forEach(p => options += `<option value="${esc(p.nombre)}" ${r.proveedor === p.nombre ? 'selected' : ''}>${esc(p.nombre)}</option>`);
+            tr.innerHTML = `
+                <td>${esc(r.RMA_Asociado)}</td><td>${esc(r.Cdar || r.CodAr)}</td><td>${esc((r["Nombre Articulo"] || r["Denominacion Articulo"] || '').substring(0,35))}</td><td>${esc(r["Nº Serie"])}</td>
+                <td><select ${vistaActual !== 'principal' ? 'disabled' : ''} onchange="updateRecord('${r.id}', {proveedor: this.value})">${options}</select></td>
+                <td style="text-align:right">
+                    ${r.status === 'enviado' ? `<button class="btn" style="color:var(--warning)" onclick="updateRecord('${r.id}', {status: 'pendiente'})"><i data-lucide="rotate-ccw" style="width:14px"></i></button>` : ''}
+                    <button class="btn" style="color:var(--danger)" onclick="deleteRecord('${r.id}')"><i data-lucide="trash-2" style="width:14px"></i></button>
+                </td>`;
+            tbody.appendChild(tr);
+        });
+        renderBulkAssignBar();
+        lucide.createIcons();
+    };
+
+    window.renderTabs = () => {
+        const container = document.getElementById('tabsFabricantes');
+        const countP = registros.filter(r => r.status === 'pendiente').length;
+        let html = `<button class="tab-btn ${vistaActual === 'principal' ? 'active' : ''}" onclick="cambiarVista('principal')">Pendientes <span class="badge">${countP}</span></button>`;
+        proveedores.forEach(p => {
+            const count = registros.filter(r => r.proveedor === p.nombre && r.status === 'enviado').length;
+            if (count > 0) html += `<button class="tab-btn ${vistaActual === p.nombre ? 'active' : ''}" data-v="${esc(p.nombre)}" onclick="cambiarVista(this.dataset.v)">${esc(p.nombre)} <span class="badge">${count}</span></button>`;
+        });
+        container.innerHTML = html;
+        document.getElementById('areaAcciones').style.display = vistaActual === 'principal' ? 'block' : 'none';
+        renderBulkAssignBar();
+        lucide.createIcons();
+    };
+
+    window.renderBulkAssignBar = () => {
+        const bar = document.getElementById('bulkAssignBar');
+        const select = document.getElementById('bulkProvSelect');
+        const countP = registros.filter(r => r.status === 'pendiente').length;
+        const search = document.getElementById('globalSearch').value;
+        const mostrar = vistaActual === 'principal' && !search && proveedores.length > 0 && countP > 0;
+        bar.style.display = mostrar ? 'flex' : 'none';
+        if (!mostrar) return;
+        const seleccionPrevia = select.value;
+        select.innerHTML = proveedores.map(p => `<option value="${esc(p.nombre)}">${esc(p.nombre)}</option>`).join('');
+        if (proveedores.some(p => p.nombre === seleccionPrevia)) select.value = seleccionPrevia;
+    };
+
+    window.asignarTodosPendientes = async () => {
+        const select = document.getElementById('bulkProvSelect');
+        const fabricante = select.value;
+        if (!fabricante) return;
+        const aAsignar = registros.filter(r => r.status === 'pendiente');
+        if (!aAsignar.length) return;
+        if (!confirm(`¿Asignar ${aAsignar.length} línea(s) pendiente(s) a "${fabricante}"?`)) return;
+        await batchEnc(aAsignar.map(r => ({ col: "registros_rma", id: r.id, data: { ...strip(r), proveedor: fabricante } })));
+        window.showToast(`<b>${aAsignar.length} línea(s)</b> asignadas a ${esc(fabricante)}`);
+    };
+
+    window.renderShelf = () => {
+        const container = document.getElementById('shelfContainer');
+        container.innerHTML = estanteria.length === 0 ? '<p style="text-align:center; color:#94a3b8">Vacío.</p>' : '';
+        estanteria.forEach(s => {
+            const row = document.createElement('div');
+            row.className = 'shelf-row';
+            row.innerHTML = `
+                <div class="shelf-header" onclick="toggleShelfDetails('${s.id}')">
+                    <span><b>Envío:</b> <input type="text" class="shelf-input" value="${esc(s.envio)}" onchange="updateShelf('${s.id}', {envio:this.value})" onclick="event.stopPropagation()"></span>
+                    <span style="color:var(--primary); font-weight:700">${esc(s.fabricante)}</span>
+                    <small>${esc(s.fecha)}</small>
+                    <input type="text" class="shelf-input" value="${esc(s.observaciones)}" placeholder="Notas..." onchange="updateShelf('${s.id}', {observaciones:this.value})" onclick="event.stopPropagation()">
+                    <div style="display:flex; gap:5px">
+                        <button class="btn" style="background:var(--warning); color:white; padding:5px 10px" onclick="devolverDeEstanteria('${s.id}'); event.stopPropagation()"><i data-lucide="undo-2" style="width:16px"></i></button>
+                        <button class="btn" style="background:var(--success); color:white; padding:5px 10px" onclick="finalizarEnvio('${s.id}'); event.stopPropagation()"><i data-lucide="check-circle" style="width:16px"></i></button>
+                    </div>
+                </div>
+                <div id="details-${s.id}" class="shelf-details">
+                    <table>
+                        ${s.items.map(i => `<tr><td>${esc(i.RMA_Asociado)}</td><td>${esc(i.Cdar||i.CodAr)}</td><td>${esc(i["Nº Serie"])}</td></tr>`).join('')}
+                    </table>
+                </div>`;
+            container.appendChild(row);
+        });
+        lucide.createIcons();
+    };
+
+    window.toggleShelfDetails = (id) => {
+        const div = document.getElementById(`details-${id}`);
+        div.style.display = div.style.display === 'block' ? 'none' : 'block';
+    };
+
+    window.procesarExcel = async () => {
+        const rField = document.getElementById('rmaInput'), fField = document.getElementById('fileInput');
+        if(!rField.value || !fField.files[0]) return alert("Falta RMA o Archivo");
+        const rmaVal = rField.value;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const data = XLSX.utils.sheet_to_json(XLSX.read(e.target.result, {type:'array'}).Sheets[XLSX.read(e.target.result, {type:'array'}).SheetNames[0]]);
+            await batchEnc(data.map(row => ({ col: "registros_rma", id: newId("registros_rma"), data: { ...row, RMA_Asociado: rmaVal, proveedor: 'pendiente', status: 'pendiente' } })));
+            rField.value = ''; fField.value = '';
+            window.showToast("<b>Carga finalizada</b>");
+        };
+        reader.readAsArrayBuffer(fField.files[0]);
+    };
+
+    window.deleteRecord = async (id) => { 
+        await deleteDoc(doc(db, "registros_rma", id)); 
+        window.showToast("Línea borrada correctamente");
+    };
+
+    // --- EXPORTAR / IMPORTAR ---
+    const fechaArchivo = () => new Date().toISOString().slice(0, 10);
+
+    const descargar = (blob, nombre) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = nombre;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+
+    window.exportarJSON = () => {
+        if (!proveedores.length && !registros.length && !estanteria.length) return window.showToast("No hay datos para exportar");
+        const backup = {
+            formato: "rma-manager-backup", version: 1, exportado: new Date().toISOString(),
+            proveedores, registros, estanteria
+        };
+        descargar(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }), `rma-manager-backup-${fechaArchivo()}.json`);
+        window.showToast(`<b>Copia exportada</b><br><small>${proveedores.length} fabricantes · ${registros.length} registros · ${estanteria.length} envíos</small>`);
+    };
+
+    window.exportarExcel = () => {
+        if (!registros.length && !estanteria.length) return window.showToast("No hay datos para exportar");
+        const wb = XLSX.utils.book_new();
+
+        const filasReg = registros.map(({ id, ...r }) => r);
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasReg), "Registros");
+
+        const filasEnv = [];
+        estanteria.forEach(s => (s.items || []).forEach(i => filasEnv.push({
+            "Envío": s.envio || "", "Fabricante": s.fabricante || "", "Fecha": s.fecha || "", "Observaciones": s.observaciones || "",
+            "RMA": i.RMA_Asociado || "", "Cdar": i.Cdar || i.CodAr || "",
+            "Artículo": i["Nombre Articulo"] || i["Denominacion Articulo"] || "", "Nº Serie": i["Nº Serie"] || ""
+        })));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filasEnv), "Estantería");
+
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(proveedores.map(p => ({ Fabricante: p.nombre }))), "Fabricantes");
+        XLSX.writeFile(wb, `rma-manager-${fechaArchivo()}.xlsx`);
+        window.showToast("<b>Excel exportado</b>");
+    };
+
+    window.importarJSON = async () => {
+        const fichero = document.getElementById('importFile').files[0];
+        if (!fichero) return alert("Selecciona primero un archivo .json");
+
+        let data;
+        try { data = JSON.parse(await fichero.text()); }
+        catch { return alert("El archivo no es un JSON válido."); }
+
+        if (data.formato !== "rma-manager-backup" || !Array.isArray(data.proveedores) || !Array.isArray(data.registros) || !Array.isArray(data.estanteria))
+            return alert("Este archivo no es una copia de seguridad de RMA Manager.");
+
+        const reemplazar = document.querySelector('input[name="importMode"]:checked').value === 'replace';
+        const resumen = `${data.proveedores.length} fabricante(s), ${data.registros.length} registro(s) y ${data.estanteria.length} envío(s) de estantería`;
+        const aviso = reemplazar
+            ? `Se BORRARÁN todos los datos actuales y se sustituirán por:\n${resumen}.\n\nEsta acción no se puede deshacer. ¿Continuar?`
+            : `Se fusionarán:\n${resumen}.\n\nLos elementos con el mismo ID se actualizarán y el resto se conserva. ¿Continuar?`;
+        if (!confirm(aviso)) return;
+
+        const btn = document.getElementById('btnImportar');
+        btn.disabled = true;
+        try {
+            const colecciones = [
+                ["proveedores", data.proveedores, proveedores],
+                ["registros_rma", data.registros, registros],
+                ["estanteria", data.estanteria, estanteria]
+            ];
+            const ops = [];
+            for (const [nombre, nuevos, actuales] of colecciones) {
+                const idsNuevos = new Set();
+                nuevos.forEach(({ id, ...contenido }) => {
+                    const docId = id || newId(nombre);
+                    idsNuevos.add(docId);
+                    ops.push({ col: nombre, id: docId, data: contenido });
+                });
+                if (reemplazar) actuales.filter(a => !idsNuevos.has(a.id)).forEach(a => ops.push({ col: nombre, id: a.id, del: true }));
+            }
+            await batchEnc(ops);
+            document.getElementById('importFile').value = '';
+            toggleModal('modalData', false);
+            window.showToast(`<b>Importación completada</b><br><small>${resumen}</small>`);
+        } catch (err) {
+            console.error(err);
+            alert("Error durante la importación: " + err.message);
+        } finally {
+            btn.disabled = false;
+        }
+    };
+
+    window.toggleModal = (id, s) => document.getElementById(id).style.display = s ? 'grid' : 'none';
+    window.cambiarVista = (v) => { vistaActual = v; renderTabla(); renderTabs(); };
+    window.updateRecord = (id, data) => patch("registros_rma", registros, id, data);
+    window.updateShelf = (id, data) => patch("estanteria", estanteria, id, data);
+    window.addProv = async () => {
+        const inp = document.getElementById('inputNewProv');
+        if(inp.value) { await addEnc("proveedores", { nombre: inp.value }); inp.value = ''; }
+    };
+    window.delProv = async (id) => { if(confirm("¿Eliminar fabricante?")) await deleteDoc(doc(db, "proveedores", id)); };
+    window.renderModalProvs = () => {
+        const div = document.getElementById('modalListProv');
+        div.innerHTML = proveedores.map(p => `<div style="display:flex; justify-content:space-between; padding:10px; border-bottom:1px solid #eee"><span>${esc(p.nombre)}</span><button class="btn" style="color:red; padding:2px 8px" onclick="delProv('${p.id}')">x</button></div>`).join('');
+    };
+    window.devolverDeEstanteria = async (id) => {
+        const line = estanteria.find(s => s.id === id);
+        await batchEnc(line.items.map(item => ({ col: "registros_rma", id: item.id, data: { ...strip(item), status: 'enviado' } })));
+        await deleteDoc(doc(db, "estanteria", id));
+    };
+    window.finalizarEnvio = async (id) => {
+        if(confirm("¿Finalizar envío?")) {
+            const line = estanteria.find(s => s.id === id);
+            for(let item of line.items) await deleteDoc(doc(db, "registros_rma", item.id));
+            await deleteDoc(doc(db, "estanteria", id));
+        }
+    };
+    window.eliminarTodoFabricante = async () => {
+        if(confirm(`¿Eliminar todo el lote?`)) {
+            const aBorrar = registros.filter(r => r.status === 'enviado' && r.proveedor === vistaActual);
+            for(let r of aBorrar) await deleteDoc(doc(db, "registros_rma", r.id));
+        }
+    };
+
+    ['authEmail', 'authPass', 'authClave'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') authSubmit(); }));
+    authModo(false); lucide.createIcons();
+</script>
+</body>
+</html>
