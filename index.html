@@ -62,6 +62,10 @@
       <label>EMAIL</label><input id="authEmail" type="email" autocomplete="username">
       <label>CONTRASEÑA</label><input id="authPass" type="password" autocomplete="current-password">
       <label>CLAVE DE CIFRADO</label><input id="authClave" type="password" autocomplete="off">
+      <label style="display:flex; align-items:center; gap:8px; font-weight:500; margin:10px 0 0; cursor:pointer">
+        <input id="authRecordar" type="checkbox" style="width:auto; margin:0"> Recordar la clave de cifrado en este navegador
+      </label>
+      <p style="font-size:0.7rem; color:#64748b; margin:4px 0 0">Úsalo solo en equipos de confianza. Email y contraseña se piden siempre.</p>
       <div id="authMsg" class="auth-msg"></div>
       <button id="btnAuth" class="btn" style="background:var(--primary); color:white; width:100%; justify-content:center" onclick="authSubmit()">Entrar</button>
     </div>
@@ -304,6 +308,32 @@
         EXISTE: 'Ese email ya tuvo una cuenta con otra contraseña. Usa esa contraseña original o un email distinto.'
     })[e.message] || e.message;
 
+    // ---------- RECORDAR CLAVE DE CIFRADO EN ESTE NAVEGADOR ----------
+    // La clave se guarda cifrada (AES-GCM) con una clave NO exportable que vive en IndexedDB.
+    const idb = () => new Promise((res, rej) => {
+        const r = indexedDB.open('rma-keystore', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('k');
+        r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    });
+    const idbOp = async (mode, fn) => { const d = await idb(); return new Promise((res, rej) => { const q = fn(d.transaction('k', mode).objectStore('k')); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); };
+    const guardarClave = async clave => {
+        try {
+            let wk = await idbOp('readonly', st => st.get('wk'));
+            if (!wk) { wk = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']); await idbOp('readwrite', st => st.put(wk, 'wk')); }
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wk, te.encode(clave));
+            await idbOp('readwrite', st => st.put({ iv, ct }, 'claveEnc'));
+        } catch (e) { console.warn('No se pudo recordar la clave', e); }
+    };
+    const cargarClave = async () => {
+        try {
+            const wk = await idbOp('readonly', st => st.get('wk')), r = await idbOp('readonly', st => st.get('claveEnc'));
+            if (!wk || !r) return null;
+            return td.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: r.iv }, wk, r.ct));
+        } catch { return null; }
+    };
+    const olvidarClave = async () => { try { await idbOp('readwrite', st => st.delete('claveEnc')); await idbOp('readwrite', st => st.delete('wk')); } catch {} };
+
     window.authSubmit = async () => {
         const email = $('authEmail').value.trim().toLowerCase(), pass = $('authPass').value, clave = $('authClave').value;
         if (!email || !pass || !clave) return $('authMsg').textContent = 'Rellena email, contraseña y clave de cifrado.';
@@ -312,6 +342,8 @@
             await setPersistence(auth, inMemoryPersistence); // cada recarga exige volver a introducir las 3 credenciales
             const cred = await signInWithEmailAndPassword(auth, await alias(email), pass);
             try { await entrar(cred.user, email, clave); } catch (e) { await signOut(auth); cryptoKey = null; throw e; }
+            // Login correcto: recordar (o borrar) la clave según la casilla
+            await ($('authRecordar').checked ? guardarClave(clave) : olvidarClave());
         } catch (e) { console.error(e); $('authMsg').textContent = errTxt(e); }
         finally { $('btnAuth').disabled = false; }
     };
@@ -344,7 +376,7 @@
         // Si el master cambia la clave de cifrado, hay que volver a entrar con la nueva
         unsubs.push(onSnapshot(doc(db, 'config', 'meta'), s => {
             const m = s.data();
-            if (m && saltActual && m.salt !== saltActual) expulsar('El master ha cambiado la clave de cifrado. Vuelve a entrar con la clave nueva.');
+            if (m && saltActual && m.salt !== saltActual) { olvidarClave(); expulsar('El master ha cambiado la clave de cifrado. Vuelve a entrar con la clave nueva.'); }
         }));
         if (esMaster) {
             $('cfgTabs').style.display = 'flex';
@@ -456,6 +488,7 @@
                 await b.commit();
             }
             await setDoc(metaRef, { salt: saltActual, verif: await encText('RMA-OK') });
+            if (await cargarClave() !== null) await guardarClave(nueva); // mantener la clave recordada al día
 
             ['ckActual', 'ckNueva', 'ckRep'].forEach(id => $(id).value = '');
             estado(`Clave cambiada. ${ops.length} elemento(s) re-cifrados${omitidos ? ` (${omitidos} ilegible(s) con la clave anterior, sin tocar)` : ''}.`, true);
@@ -793,6 +826,7 @@
         }
     };
 
+    cargarClave().then(c => { if (c) { $('authClave').value = c; $('authRecordar').checked = true; } });
     ['authEmail', 'authPass', 'authClave'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter') authSubmit(); }));
     lucide.createIcons();
 </script>
