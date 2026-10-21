@@ -49,6 +49,20 @@
         .cfg-input { padding: 10px; border: 1px solid var(--gray-200); border-radius: 8px; box-sizing: border-box; font: inherit; }
         .cfg-note { font-size: 0.75rem; color: #64748b; margin: 8px 0 0; }
         .cfg-msg { font-size: 0.8rem; min-height: 1.2em; margin: 10px 0 0; color: var(--danger); }
+        .btn-dot { position: relative; }
+        .notas-dot { display: none; position: absolute; top: -4px; right: -4px; width: 12px; height: 12px; background: var(--danger); border: 2px solid white; border-radius: 50%; }
+        .nota-fecha { font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin: 16px 0 6px; display: flex; gap: 8px; align-items: center; }
+        .nota-fecha.hoy { color: var(--danger); }
+        .nota-fecha.vencida { color: var(--warning); }
+        .nota-item { display: flex; gap: 10px; align-items: center; justify-content: space-between; border: 1px solid var(--gray-200); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; background: white; }
+        .nota-item.hecha { background: var(--gray-50); opacity: .7; }
+        .nota-item.hecha .nota-texto { text-decoration: line-through; }
+        .nota-vis { font-size: 0.65rem; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin-right: 6px; vertical-align: middle; }
+        .nota-vis.priv { background: #fef3c7; color: #92400e; }
+        .nota-vis.comp { background: #dbeafe; color: #1e40af; }
+        .nota-texto { flex: 1; font-size: 0.9rem; white-space: pre-wrap; word-break: break-word; }
+        .nota-acciones { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
+        .nota-acciones .btn { padding: 6px 10px; font-size: 0.8rem; }
         .badge { background: #e2e8f0; padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: bold; }
     </style>
 </head>
@@ -79,6 +93,9 @@
             <a href="https://a72786990-spec.github.io/garantias/" target="_blank" class="btn" style="background:#6d28d9; color:white">
                 <i data-lucide="shield-check"></i> Garantías
             </a>
+            <button class="btn btn-dot" style="background:#ca8a04; color:white" onclick="abrirNotas()">
+                <i data-lucide="sticky-note"></i> Notas <span id="notasDot" class="notas-dot"></span>
+            </button>
             <button class="btn" style="background:#475569; color:white" onclick="toggleModal('modalShelf', true)">
                 <i data-lucide="archive"></i> Estantería
             </button>
@@ -157,6 +174,26 @@
             <button class="btn" onclick="toggleModal('modalShelf', false)">Cerrar</button>
         </div>
         <div id="shelfContainer"></div>
+    </div>
+</div>
+
+<div id="modalNotas" class="modal-overlay">
+    <div class="modal-card" style="max-width:640px">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px">
+            <h3 style="margin:0; display:flex; align-items:center; gap:8px"><i data-lucide="sticky-note"></i> Notas y recordatorios</h3>
+            <button class="btn" style="background:var(--gray-200)" onclick="toggleModal('modalNotas', false)">Cerrar</button>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-start">
+            <input type="date" id="notaFecha" class="cfg-input">
+            <select id="notaVis" class="cfg-input" title="Quién puede ver la nota">
+                <option value="shared">Compartida (todos)</option>
+                <option value="private">Individual (solo yo)</option>
+            </select>
+            <textarea id="notaTexto" class="cfg-input" rows="2" placeholder="Texto del recordatorio..." style="flex:1; min-width:200px; resize:vertical"></textarea>
+            <button class="btn" style="background:var(--success); color:white" onclick="addNota()"><i data-lucide="plus"></i> Añadir</button>
+        </div>
+        <div id="notasMsg" class="cfg-msg"></div>
+        <div id="notasLista" style="max-height:60vh; overflow-y:auto"></div>
     </div>
 </div>
 
@@ -241,7 +278,7 @@
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getAuth, setPersistence, inMemoryPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-    import { getFirestore, collection, deleteDoc, doc, getDoc, setDoc, updateDoc, onSnapshot, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getFirestore, collection, deleteDoc, doc, getDoc, setDoc, updateDoc, onSnapshot, writeBatch, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyDQeJqTUcjbsOPKQIFDl_dTV3K81ampADs",
@@ -258,7 +295,7 @@
     const auth2 = getAuth(initializeApp(firebaseConfig, 'altas'));
     const db = getFirestore(app);
     const MASTER_EMAIL = "agamarra@megasur.es";
-    let vistaActual = "principal", proveedores = [], registros = [], estanteria = [], usuarios = [];
+    let vistaActual = "principal", proveedores = [], registros = [], estanteria = [], usuarios = [], notas = [], notasPriv = [], privKey = null;
     let cryptoKey = null, esMaster = false, unsubs = [], miUid = null, saltActual = null, saliendo = false;
 
     // ---------- CIFRADO (AES-GCM 256, clave derivada con PBKDF2; la clave nunca sale del navegador) ----------
@@ -341,14 +378,14 @@
         try {
             await setPersistence(auth, inMemoryPersistence); // cada recarga exige volver a introducir las 3 credenciales
             const cred = await signInWithEmailAndPassword(auth, await alias(email), pass);
-            try { await entrar(cred.user, email, clave); } catch (e) { await signOut(auth); cryptoKey = null; throw e; }
+            try { await entrar(cred.user, email, clave, pass); } catch (e) { await signOut(auth); cryptoKey = null; throw e; }
             // Login correcto: recordar (o borrar) la clave según la casilla
             await ($('authRecordar').checked ? guardarClave(clave) : olvidarClave());
         } catch (e) { console.error(e); $('authMsg').textContent = errTxt(e); }
         finally { $('btnAuth').disabled = false; }
     };
 
-    async function entrar(user, email, clave) {
+    async function entrar(user, email, clave, pass) {
         esMaster = user.email === await alias(MASTER_EMAIL); miUid = user.uid;
         const metaRef = doc(db, 'config', 'meta'), meta = await getDoc(metaRef);
         if (!meta.exists()) {
@@ -366,6 +403,9 @@
             if (!esMaster) throw new Error('NO_ACCESS');
             await setDoc(pRef, { emailEnc: await encText(email), aprobado: true, rol: 'master', creado: new Date().toISOString() });
         } else if (!esMaster && !p.data().aprobado) throw new Error('NO_ACCESS');
+        // Clave personal (solo para notas individuales): derivada de TU contraseña + tu uid; no se guarda en ningún sitio
+        const saltP = new Uint8Array(await crypto.subtle.digest('SHA-256', te.encode('rma-notas|' + user.uid))).slice(0, 16);
+        privKey = await deriveKey(pass, saltP);
         abrirApp();
     }
 
@@ -467,7 +507,7 @@
         const claveAnterior = cryptoKey; let ops = [];
         try {
             let omitidos = 0;
-            for (const col of ['proveedores', 'registros_rma', 'estanteria']) {
+            for (const col of ['proveedores', 'registros_rma', 'estanteria', 'notas']) {
                 for (const d of (await getDocs(collection(db, col))).docs) {
                     const o = await decSnap(d);
                     if (o) ops.push({ col, id: d.id, data: strip(o) }); else omitidos++;
@@ -509,6 +549,14 @@
         }));
         unsubs.push(listen('registros_rma', r => { registros = r; renderTabs(); renderTabla(); }));
         unsubs.push(listen('estanteria', r => { estanteria = r; renderShelf(); }));
+        unsubs.push(listen('notas', r => { notas = r; renderNotas(); }));
+        unsubs.push(onSnapshot(query(collection(db, 'notas_privadas'), where('uid', '==', miUid)), async snap => {
+            notasPriv = (await Promise.all(snap.docs.map(async d => {
+                try { return { id: d.id, ...JSON.parse(await decPriv(d.data().c)) }; } catch { return null; }
+            }))).filter(Boolean);
+            renderNotas();
+        }, e => console.error('notas_privadas', e)));
+        const t = setInterval(renderNotas, 60000); unsubs.push(() => clearInterval(t)); // al cambiar de día se actualiza el punto rojo
     }
 
     window.showToast = (html) => {
@@ -792,6 +840,88 @@
         } finally {
             btn.disabled = false;
         }
+    };
+
+    // ---------- NOTAS / RECORDATORIOS (compartidas y cifradas) ----------
+    const hoyISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+    const fmtFecha = f => f.split('-').reverse().join('/');
+    const notaMsg = t => { $('notasMsg').textContent = t || ''; };
+
+    window.abrirNotas = () => {
+        if (!$('notaFecha').value) $('notaFecha').value = hoyISO();
+        notaMsg(''); renderNotas(); toggleModal('modalNotas', true);
+    };
+
+    // Notas individuales: cifradas con la clave personal (privKey) y filtradas por uid
+    const encPriv = async txt => {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, privKey, te.encode(txt)));
+        const out = new Uint8Array(12 + ct.length); out.set(iv); out.set(ct, 12);
+        return toB64(out);
+    };
+    const decPriv = async x => { const u = fromB64(x); return td.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: u.slice(0, 12) }, privKey, u.slice(12))); };
+    const setPriv = async (id, o) => setDoc(doc(db, 'notas_privadas', id), { uid: miUid, c: await encPriv(JSON.stringify(o)) });
+    const todas = () => [...notas.map(n => ({ ...n, _p: false })), ...notasPriv.map(n => ({ ...n, _p: true }))];
+    const patchNota = (id, p) => {
+        const n = todas().find(x => x.id === id); if (!n) return;
+        const { id: _i, _p, ...rest } = n;
+        return _p ? setPriv(id, { ...rest, ...p }) : setEnc('notas', id, { ...rest, ...p });
+    };
+
+    window.renderNotas = () => {
+        const hoy = hoyISO(), all = todas();
+        // Punto rojo: recordatorios pendientes de hoy (o vencidos sin finalizar)
+        $('notasDot').style.display = all.some(n => !n.hecha && n.fecha <= hoy) ? 'block' : 'none';
+        const cont = $('notasLista'); if (!cont) return;
+        const vis = n => n._p ? '<span class="nota-vis priv">Solo yo</span>' : '<span class="nota-vis comp">Compartida</span>';
+        const pend = all.filter(n => !n.hecha).sort((a, b) => a.fecha.localeCompare(b.fecha) || (a.creado || '').localeCompare(b.creado || ''));
+        const hechas = all.filter(n => n.hecha).sort((a, b) => b.fecha.localeCompare(a.fecha));
+        let html = '', ult = null;
+        pend.forEach(n => {
+            if (n.fecha !== ult) {
+                ult = n.fecha;
+                const cls = n.fecha === hoy ? 'hoy' : n.fecha < hoy ? 'vencida' : '';
+                html += `<div class="nota-fecha ${cls}">${esc(fmtFecha(n.fecha))}${n.fecha === hoy ? ' · HOY' : n.fecha < hoy ? ' · VENCIDA' : ''}</div>`;
+            }
+            html += `<div class="nota-item"><div class="nota-texto">${vis(n)}${esc(n.texto)}</div>
+                <div class="nota-acciones">
+                    <input type="date" id="nf-${n.id}" class="cfg-input" style="padding:5px" value="${esc(n.fecha)}">
+                    <button class="btn" style="background:var(--primary); color:white" onclick="moverNota('${n.id}')" title="Pasar a la fecha elegida"><i data-lucide="calendar-clock" style="width:14px"></i> Mover</button>
+                    <button class="btn" style="background:var(--success); color:white" onclick="finalizarNota('${n.id}', true)"><i data-lucide="check" style="width:14px"></i> Finalizar</button>
+                </div></div>`;
+        });
+        if (!pend.length) html += '<p style="text-align:center; color:#94a3b8; margin-top:20px">No hay recordatorios pendientes.</p>';
+        if (hechas.length) {
+            html += `<div class="nota-fecha" style="margin-top:24px">Finalizadas</div>`;
+            hechas.forEach(n => {
+                html += `<div class="nota-item hecha"><div class="nota-texto">${vis(n)}<small>${esc(fmtFecha(n.fecha))}</small> · ${esc(n.texto)}</div>
+                    <div class="nota-acciones">
+                        <button class="btn" style="background:var(--gray-200)" onclick="finalizarNota('${n.id}', false)">Reabrir</button>
+                        <button class="btn" style="color:var(--danger)" onclick="eliminarNota('${n.id}')"><i data-lucide="trash-2" style="width:14px"></i></button>
+                    </div></div>`;
+            });
+        }
+        cont.innerHTML = html; lucide.createIcons();
+    };
+
+    window.addNota = async () => {
+        const fecha = $('notaFecha').value, texto = $('notaTexto').value.trim(), priv = $('notaVis').value === 'private';
+        if (!fecha) return notaMsg('Elige una fecha.');
+        if (!texto) return notaMsg('Escribe el texto del recordatorio.');
+        notaMsg('');
+        const o = { fecha, texto, hecha: false, creado: new Date().toISOString() };
+        try { await (priv ? setPriv(newId('notas_privadas'), o) : addEnc('notas', o)); $('notaTexto').value = ''; }
+        catch (e) { console.error(e); notaMsg('No se pudo guardar la nota.'); }
+    };
+    window.finalizarNota = (id, v) => patchNota(id, { hecha: v });
+    window.moverNota = id => {
+        const f = $('nf-' + id).value;
+        if (!f) return notaMsg('Elige la nueva fecha.');
+        notaMsg(''); return patchNota(id, { fecha: f });
+    };
+    window.eliminarNota = id => {
+        const n = todas().find(x => x.id === id);
+        if (n && confirm('¿Eliminar esta nota?')) deleteDoc(doc(db, n._p ? 'notas_privadas' : 'notas', id));
     };
 
     window.toggleModal = (id, s) => document.getElementById(id).style.display = s ? 'grid' : 'none';
