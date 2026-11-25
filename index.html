@@ -93,9 +93,6 @@
             <a href="https://a72786990-spec.github.io/garantias/" target="_blank" class="btn" style="background:#6d28d9; color:white">
                 <i data-lucide="shield-check"></i> Garantías
             </a>
-            <button class="btn btn-dot" style="background:#ca8a04; color:white" onclick="abrirNotas()">
-                <i data-lucide="sticky-note"></i> Notas <span id="notasDot" class="notas-dot"></span>
-            </button>
             <button class="btn" style="background:#475569; color:white" onclick="toggleModal('modalShelf', true)">
                 <i data-lucide="archive"></i> Estantería
             </button>
@@ -871,7 +868,7 @@
     window.renderNotas = () => {
         const hoy = hoyISO(), all = todas();
         // Punto rojo: recordatorios pendientes de hoy (o vencidos sin finalizar)
-        $('notasDot').style.display = all.some(n => !n.hecha && n.fecha <= hoy) ? 'block' : 'none';
+        const dot = $('notasDot'); if (dot) dot.style.display = all.some(n => !n.hecha && n.fecha <= hoy) ? 'block' : 'none';
         const cont = $('notasLista'); if (!cont) return;
         const vis = n => n._p ? '<span class="nota-vis priv">Solo yo</span>' : '<span class="nota-vis comp">Compartida</span>';
         const pend = all.filter(n => !n.hecha).sort((a, b) => a.fecha.localeCompare(b.fecha) || (a.creado || '').localeCompare(b.creado || ''));
